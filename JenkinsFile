@@ -73,7 +73,10 @@ pipeline {
                             mvn clean package
                             
                             echo "=== Baking Application AMI with Packer ==="
-                            packer build Java_packer.pkr.hcl
+                            packer init Java_packer.pkr.hcl
+                            packer fmt -check Java_packer.pkr.hcl
+                            packer validate Java_packer.pkr.hcl
+                            packer build -force Java_packer.pkr.hcl
                         '
                     """
                 }
