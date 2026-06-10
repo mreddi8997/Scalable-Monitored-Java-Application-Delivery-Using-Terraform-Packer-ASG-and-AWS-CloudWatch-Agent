@@ -9,8 +9,6 @@ pipeline {
         INSTANCE_TYPE      = 't3.small'
         SECURITY_GROUP     = 'default' // Must allow SSH inbound from Controller IP
         KEY_NAME           = 'Jenkins-worker-ssh-keypair' // The exact name of your EC2 Key Pair in AWS
-        SUBNET_ID          = 'subnet-026b023a32d6a39f6' // Optional: Specify your subnet for better control
-    }
 
     stages {
         stage('Provision Temporary Worker') {
@@ -24,7 +22,6 @@ pipeline {
                             --instance-type ${INSTANCE_TYPE} \
                             --security-group-ids ${SECURITY_GROUP} \
                             --key-name ${KEY_NAME} \
-                            --subnet-id ${SUBNET_ID} \ 
                             --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Jenkins-Dynamic-Packer-Worker}]' \
                             --query 'Instances[0].[InstanceId, PublicIpAddress]' \
                             --output text
