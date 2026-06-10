@@ -24,7 +24,7 @@ pipeline {
                             --instance-type ${INSTANCE_TYPE} \
                             --security-group-ids ${SECURITY_GROUP} \
                             --key-name ${KEY_NAME} \
-                            --subnet-id ${SUBNET_ID} \  # Optional: Specify your subnet for better control
+                            --subnet-id ${SUBNET_ID} \ 
                             --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Jenkins-Dynamic-Packer-Worker}]' \
                             --query 'Instances[0].[InstanceId, PublicIpAddress]' \
                             --output text
