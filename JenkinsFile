@@ -30,7 +30,21 @@ pipeline {
 
                     // Save worker info to global environment variables
                     env.WORKER_INSTANCE_ID = runResult[0]
-                    env.WORKER_IP          = runResult[1]
+                    echo "Spawned Instance ID: ${env.WORKER_INSTANCE_ID}"
+
+                    // 2. PAUSE and poll AWS until the instance network card is fully ready
+                    echo "Waiting for AWS to initialize instance and assign public networking..."
+                    sh "aws ec2 wait instance-running --instance-ids ${env.WORKER_INSTANCE_ID}"
+
+                    // 3. NOW query the valid public IP address safely
+                    def publicIp = sh(script: """
+                        aws ec2 describe-instances \
+                            --instance-ids ${env.WORKER_INSTANCE_ID} \
+                            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+                            --output text
+                    """, returnStdout: true).trim()
+
+                    env.WORKER_IP = publicIp
                     
                     echo "--------------------------------------------------------"
                     echo "SUCCESS: Spawned Worker ID: ${env.WORKER_INSTANCE_ID}"
