@@ -9,7 +9,7 @@ pipeline {
         INSTANCE_TYPE      = 't3.small'
         SECURITY_GROUP     = 'default' // Must allow SSH inbound from Controller IP
         KEY_NAME           = 'Jenkins-worker-ssh-keypair' // The exact name of your EC2 Key Pair in AWS
-        SUBNET_ID          = 'jenkins-worker-subnet' // Optional: Specify your subnet for better control
+        SUBNET_ID          = 'subnet-026b023a32d6a39f6' // Optional: Specify your subnet for better control
     }
 
     stages {
