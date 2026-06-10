@@ -1,51 +1,100 @@
 pipeline {
-    agent {
-        // Targets a Jenkins agent node running natively on an EC2 instance
-        label 'ec2-packer-runner' 
+    agent { 
+        label 'built-in' // The master controller executes this script to orchestrate the infrastructure
     }
-
+    
     environment {
-        ARTIFACT_NAME = "app.jar"
-        AWS_REGION    = "us-east-2" // Update to your desired AWS region
+        AWS_DEFAULT_REGION = 'us-east-2' // Swap with your active AWS region
+        WORKER_AMI         = 'ami-0787a755d71dbf650' // Your custom Golden AMI ID (Java+Maven+Packer)
+        INSTANCE_TYPE      = 't3.small'
+        SECURITY_GROUP     = 'default' // Must allow SSH inbound from Controller IP
+        KEY_NAME           = 'Jenkins-worker-ssh-keypair' // The exact name of your EC2 Key Pair in AWS
     }
 
     stages {
-        stage('1. Checkout Source') {
+        stage('Provision Temporary Worker') {
             steps {
-                checkout scm
+                echo "Launching on-demand EC2 build agent..."
+                script {
+                    // Spin up the instance and output its ID and IP address
+                    def runResult = sh(script: """
+                        aws ec2 run-instances \
+                            --image-id ${WORKER_AMI} \
+                            --instance-type ${INSTANCE_TYPE} \
+                            --security-group-ids ${SECURITY_GROUP} \
+                            --key-name ${KEY_NAME} \
+                            --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Jenkins-Dynamic-Packer-Worker}]' \
+                            --query 'Instances[0].[InstanceId, PublicIpAddress]' \
+                            --output text
+                    """, returnStdout: true).trim().tokenize()
+
+                    // Save worker info to global environment variables
+                    env.WORKER_INSTANCE_ID = runResult[0]
+                    env.WORKER_IP          = runResult[1]
+                    
+                    echo "--------------------------------------------------------"
+                    echo "SUCCESS: Spawned Worker ID: ${env.WORKER_INSTANCE_ID}"
+                    echo "Worker IP Address: ${env.WORKER_IP}"
+                    echo "--------------------------------------------------------"
+                    
+                    // Allow the OS SSH daemon 30 seconds to initialize completely
+                    echo "Allowing SSH daemon to boot..."
+                    sh "sleep 30"
+                }
             }
         }
 
-        stage('2. Build Java Application') {
+        stage('Execute Maven & Packer on Worker') {
             steps {
-                echo 'Compiling Java code natively on the EC2 build agent...'
-                // Assumes Maven and Java are installed on your EC2 agent node
-                sh 'mvn clean package -DskipTests'
-                
-                echo 'Staging artifact for Packer processing...'
-                sh "cp target/*.jar target/${ARTIFACT_NAME}"
-            }
-        }
-
-        stage('3. Bake and Register AMI via Packer') {
-            steps {
-                echo 'Initializing Packer AWS plugins...'
-                sh 'packer init java-app.pkr.hcl'
-
-                echo 'Validating Packer configuration template...'
-                sh 'packer validate java-app.pkr.hcl'
-
-                echo 'Executing Packer build to bake image and register it in the AMI Catalog...'
-                // Packer will read target/app.jar directly from the workspace
-                sh 'packer build -var "aws_region=${AWS_REGION}" java-app.pkr.hcl'
+                echo "Handoff: Shipping workspace and executing pipeline on worker node..."
+                // Invokes your SSH agent credential profile to cleanly authenticate
+                sshagent(credentials: ['ec2-worker-ssh-key']) { 
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ubuntu@${env.WORKER_IP} '
+                            git clone ${env.GIT_URL} app && cd app
+                            
+                            echo "=== Running Maven Build ==="
+                            mvn clean package
+                            
+                            echo "=== Baking Application AMI with Packer ==="
+                            packer build packer-template.json
+                        '
+                    """
+                }
             }
         }
     }
 
     post {
-        always {
-            echo 'Cleaning up build workspace resources...'
-            cleanWs()
+        success {
+            script {
+                if (env.WORKER_INSTANCE_ID) {
+                    echo "Pipeline Succeeded! Cleaning up resources automatically..."
+                    sh "aws ec2 terminate-instances --instance-ids ${env.WORKER_INSTANCE_ID}"
+                    echo "Worker ${env.WORKER_INSTANCE_ID} has been successfully terminated."
+                }
+            }
+        }
+        
+        failure {
+            script {
+                if (env.WORKER_INSTANCE_ID) {
+                    echo "================================================================================="
+                    echo "❌ PIPELINE FAILED: INFRASTRUCTURE PRESERVED FOR DEBUGGING"
+                    echo "The worker instance has NOT been terminated so you can investigate the logs."
+                    echo "Instance ID: ${env.WORKER_INSTANCE_ID}"
+                    echo "Public IP:   ${env.WORKER_IP}"
+                    echo "SSH Command: ssh ubuntu@${env.WORKER_IP}"
+                    echo "================================================================================="
+                    
+                    // Update the AWS Name Tag so you can easily spot the broken worker in your AWS Console
+                    sh """
+                        aws ec2 create-tags \
+                            --resources ${env.WORKER_INSTANCE_ID} \
+                            --tags Key=Name,Value=Jenkins-Worker-FAILED-Debug
+                    """
+                }
+            }
         }
     }
 }
