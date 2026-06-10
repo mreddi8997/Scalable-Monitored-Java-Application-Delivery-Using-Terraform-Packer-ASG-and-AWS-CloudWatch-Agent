@@ -7,7 +7,7 @@ pipeline {
         AWS_DEFAULT_REGION = 'us-east-2' // Swap with your active AWS region
         WORKER_AMI         = 'ami-0787a755d71dbf650' // Your custom Golden AMI ID (Java+Maven+Packer)
         INSTANCE_TYPE      = 't3.small'
-        SECURITY_GROUP     = 'default' // Must allow SSH inbound from Controller IP
+        SECURITY_GROUP-IDS     = 'default' // Must allow SSH inbound from Controller IP
         SUBNET_ID          = 'subnet-026b023a32d6a39f6' // Your VPC Subnet ID with public IP auto-assignment
         KEY_NAME           = 'Jenkins-worker-ssh-keypair' // The exact name of your EC2 Key Pair in AWS
     }
@@ -22,7 +22,7 @@ pipeline {
                         aws ec2 run-instances \
                             --image-id ${WORKER_AMI} \
                             --instance-type ${INSTANCE_TYPE} \
-                            --security-groups ${SECURITY_GROUP} \
+                            --security-group-ids ${SECURITY_GROUP-IDS} \
                             --key-name ${KEY_NAME} \
                             --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Jenkins-Dynamic-Packer-Worker}]' \
                             --subnet-id ${SUBNET_ID} \
