@@ -7,7 +7,7 @@ pipeline {
         AWS_DEFAULT_REGION = 'us-east-2' // Swap with your active AWS region
         WORKER_AMI         = 'ami-0787a755d71dbf650' // Your custom Golden AMI ID (Java+Maven+Packer)
         INSTANCE_TYPE      = 't3.small'
-        SECURITY_GROUP-IDS     = 'default' // Must allow SSH inbound from Controller IP
+        SECURITY_GROUP-IDS     = 'sg-082bfeb7e27d59f8e' // Must allow SSH inbound from Controller IP
         SUBNET_ID          = 'subnet-026b023a32d6a39f6' // Your VPC Subnet ID with public IP auto-assignment
         KEY_NAME           = 'Jenkins-worker-ssh-keypair' // The exact name of your EC2 Key Pair in AWS
     }
